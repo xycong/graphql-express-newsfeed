@@ -1,4 +1,20 @@
-const { ObjectID } = require('mongodb')
+const { ObjectID } = require('mongodb');
+const { URL } = require('url');
+
+class ValidationError extends Error {
+  constructor(message, field) {
+    super(message);
+    this.field = field;
+  }
+}
+
+function assertValidLink({ url }) {
+  try {
+    new URL(url);
+  } catch (error) {
+    throw new ValidationError('Link validation error: invalid url.', 'url');
+  }
+}
 
 module.exports = {
   Query: {
@@ -9,6 +25,7 @@ module.exports = {
 
   Mutation: {
     createLink: async (root, data, { mongo: { Links }, user }) => {
+      assertValidLink(data);
       const newLink = Object.assign({ postedById: user && user._id }, data)
       const response = await Links.insert(newLink);
       return Object.assign({ id: response.insertedIds[0] }, newLink);
@@ -41,28 +58,28 @@ module.exports = {
   Link: {
     id: root => root._id || root.id,
 
-    postedBy: async ({ postedById }, data, { mongo: { Users } }) => {
-      return await Users.findOne({ _id: postedById });
+    postedBy: async ({ postedById }, data, { dataloaders: { userLoader } }) => {
+      return await userLoader.load(postedById);
     },
 
-    votes: async ({_id}, data, {mongo: {Votes}}) => {
-      return await Votes.find({linkId: _id}).toArray();
+    votes: async ({ _id }, data, { mongo: { Votes } }) => {
+      return await Votes.find({ linkId: _id }).toArray();
     }
   },
 
   User: {
     id: root => root._id || root.id,
 
-    votes: async ({_id}, data, {mongo: {Votes}}) => {
-      return await Votes.find({userId: _id}).toArray();
+    votes: async ({ _id }, data, { mongo: { Votes } }) => {
+      return await Votes.find({ userId: _id }).toArray();
     }
   },
 
   Vote: {
     id: root => root._id || root.id,
 
-    user: async ({ userId }, data, { mongo: { Users } }) => {
-      return await Users.findOne({ _id: userId });
+    user: async ({ userId }, data, { dataloaders: { userLoader } }) => {
+      return await userLoader.load(userId);
     },
 
     link: async ({ linkId }, data, { mongo: { Links } }) => {
