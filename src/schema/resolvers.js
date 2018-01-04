@@ -1,5 +1,6 @@
 const { ObjectID } = require('mongodb');
 const { URL } = require('url');
+const pubsub = require('../pubsub');
 
 class ValidationError extends Error {
   constructor(message, field) {
@@ -16,10 +17,34 @@ function assertValidLink({ url }) {
   }
 }
 
+function buildFilters({ OR = [], description_contains, url_contains }) {
+  const filter = (description_contains || url_contains) ? {} : null;
+  if (description_contains) {
+    filter.description = { $regex: `.*${description_contains}.*` };
+  }
+  if (url_contains) {
+    filter.url = { $regex: `.*${url_contains}.*` };
+  }
+
+  let filters = filter ? [filter] : [];
+  for (let i = 0; i < OR.length; i++) {
+    filters = filters.concat(buildFilters(OR[i]));
+  }
+  return filters;
+}
+
 module.exports = {
   Query: {
-    allLinks: async (root, data, { mongo: { Links } }) => {
-      return await Links.find({}).toArray();
+    allLinks: async (root, { filter }, { mongo: { Links, Users } }) => {
+      let query = filter ? { $or: buildFilters(filter) } : {};
+      const cursor = Links.find(query);
+      if (first) {
+        cursor.limit(first);
+      }
+      if (skip) {
+        cursor.skip(skip);
+      }
+      return cursor.toArray();
     },
   },
 
@@ -28,7 +53,11 @@ module.exports = {
       assertValidLink(data);
       const newLink = Object.assign({ postedById: user && user._id }, data)
       const response = await Links.insert(newLink);
-      return Object.assign({ id: response.insertedIds[0] }, newLink);
+
+      newLink.id = response.insertedIds[0]
+      pubsub.publish('Link', { Link: { mutation: 'CREATED', node: newLink } });
+
+      return newLink;
     },
     createUser: async (root, data, { mongo: { Users } }) => {
       const newUser = {
@@ -50,8 +79,9 @@ module.exports = {
         userId: user && user._id,
         linkId: new ObjectID(data.linkId),
       };
-      const response = await Votes.insert(newVote);
-      return Object.assign({ id: response.insertedIds[0] }, newVote);
+
+      newVote.id = response.insertedIds[0]
+      pubsub.publish('Link', { Link: { mutation: 'CREATED', node: newVote } });
     },
   },
 
@@ -85,5 +115,15 @@ module.exports = {
     link: async ({ linkId }, data, { mongo: { Links } }) => {
       return await Links.findOne({ _id: linkId });
     },
+  },
+
+  Subscription: {
+    Link: {
+      subscribe: () => pubsub.asyncIterator('Link'),
+    },
+
+    Vote: {
+      subscribe: () => pubsub.asyncIterator('Vote'),
+    }
   },
 };

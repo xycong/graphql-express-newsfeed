@@ -11,7 +11,13 @@ const typeDefs = `
   }
 
   type Query {
-    allLinks: [Link!]!
+    allLinks:(filter: LinkFilter): [Link!]!
+  }
+
+  input LinkFilter {
+    OR: [LinkFilter!]
+    description_contains: String
+    url_contains: String
   }
 
   type Mutation {
@@ -23,6 +29,7 @@ const typeDefs = `
 
   type Subscription {
     Link(filter: LinkSubscriptionFilter): LinkSubscriptionPayload
+    Vote(filter: VoteSubscriptionFilter): VoteSubscriptionPayload
   }
 
   input LinkSubscriptionFilter {
@@ -32,6 +39,15 @@ const typeDefs = `
   type LinkSubscriptionPayload {
     mutation: _ModelMutationType!
     node: Link
+  }
+
+  input VoteSubscriptionFilter {
+    mutation_in: [_ModelMutationType!]
+  }
+
+  type VoteSubscriptionPayload {
+    mutation: _ModelMutationType!
+    node: Vote
   }
 
   enum _ModelMutationType {
