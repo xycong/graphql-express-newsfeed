@@ -7,6 +7,7 @@ const typeDefs = `
     url: String!
     description: String!
     postedBy: User
+    votes: [Vote!]!
   }
 
   type Query {
@@ -15,6 +16,7 @@ const typeDefs = `
 
   type Mutation {
     createLink(url: String!, description: String!): Link
+    createVote(linkId: ID!): Vote
     createUser(name: String!, authProvider: AuthProviderSignupData!): User
     signinUser(email: AUTH_PROVIDER_EMAIL): SigninPayload!
   }
@@ -28,6 +30,14 @@ const typeDefs = `
     id: ID!
     name: String!
     email: String
+    password: String
+    votes: [Vote!]!
+  }
+
+  type Vote {
+    id: ID!
+    user: User!
+    link: Link!
   }
 
   input AuthProviderSignupData {
